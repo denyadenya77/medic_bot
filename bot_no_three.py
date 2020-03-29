@@ -5,9 +5,10 @@ from telegram.utils.request import Request as TelegramRequest
 
 class ThirdMedicBot:
 
-    # declare handlers states
     (GET_USER_STATUS, GET_START_POINT, GET_FINISH_POINT, GET_DEPARTURE_DATE, GET_DEPARTURE_TIME,
-     GET_RIDE_STATUS) = range(1, 7)
+     GET_RIDE_STATUS) = map(chr, range(6))
+    DRIVER, DOCTOR = map(chr, range(6, 8))
+    ONE_TIME, REGULAR = map(chr, range(8, 10))
 
     def __init__(self, access_token: str):
         self.access_token = access_token
@@ -27,13 +28,13 @@ class ThirdMedicBot:
                 CommandHandler(command="add_one_time_ride", callback=self.add_the_ride)
             ],
             states={
-                self.GET_USER_STATUS: [CallbackQueryHandler(self.get_user_status, pattern='^(водій|лікар)$')],
+                self.GET_USER_STATUS: [CallbackQueryHandler(self.get_user_status, pattern=f'^{str(self.DRIVER)}$|^{str(self.DOCTOR)}$')],
                 self.GET_START_POINT: [MessageHandler(Filters.text, self.get_start_point, pass_user_data=True)],  # change to Filters.location
                 self.GET_FINISH_POINT: [MessageHandler(Filters.text, self.get_finish_point, pass_user_data=True)],  # change to Filters.location
                 self.GET_DEPARTURE_DATE: [MessageHandler(Filters.text, self.get_date_of_departure, pass_user_data=True)],
                 self.GET_DEPARTURE_TIME: [MessageHandler(Filters.text, self.get_time_of_departure, pass_user_data=True)],
                 self.GET_RIDE_STATUS: [CallbackQueryHandler(self.get_ride_status,
-                                                            pattern='^(однократна поїздка|регулярна поїздка)$',
+                                                            pattern=f'^{str(self.ONE_TIME)}$|^{str(self.REGULAR)}$',
                                                             pass_user_data=True)]
             },
             fallbacks=[[CommandHandler('cancel', self.cancel)]])
@@ -53,8 +54,8 @@ class ThirdMedicBot:
     # start handler methods
     def register(self, update, context):
         text = 'Давайте знайомитися! Оберить тип користувача:'
-        keyboard = [[InlineKeyboardButton("Водій", callback_data='водій'),
-                     InlineKeyboardButton("Лікар", callback_data='лікар')]]
+        keyboard = [[InlineKeyboardButton("Водій", callback_data=str(self.DRIVER)),
+                     InlineKeyboardButton("Лікар", callback_data=str(self.DOCTOR))]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         update.message.reply_text(text, reply_markup=reply_markup)
         return self.GET_USER_STATUS
@@ -62,7 +63,12 @@ class ThirdMedicBot:
     def get_user_status(self, update, context):
         query = update.callback_query
         user_type = query.data
-        query.edit_message_text(text=f'Вітаємо! Тепер ви наш {user_type}.')
+        if user_type == self.DRIVER:
+            update.callback_query.answer()
+            update.callback_query.edit_message_text(text=f'Вітаємо! Тепер ви наш DRIVER.')
+        else:
+            update.callback_query.answer()
+            update.callback_query.edit_message_text(text=f'Вітаємо! Тепер ви наш DOCTOR.')
         return ConversationHandler.END
 
     # register_conversation_handler methods
@@ -115,8 +121,12 @@ class ThirdMedicBot:
         query = update.callback_query
         ride_type = query.data
         # adding vars to user_data
-        context.user_data['ride_type'] = ride_type
-        update.message.reply_text(f'Дякуємо! Ваша поїздка зереєстрована у системі. Ми повідомимо, коли знайдемо вам '
+        if ride_type == self.ONE_TIME:
+            context.user_data['ride_type'] = 'ONE_TIME'
+        else:
+            context.user_data['ride_type'] = 'REGULAR'
+        update.callback_query.answer()
+        update.callback_query.edit_message_text(f'Дякуємо! Ваша поїздка зереєстрована у системі. Ми повідомимо, коли знайдемо вам '
                                   f'попутника\n'
                                   f'Деталі:\n'
                                   f'Координати відправлення: {context.user_data["start_latitude"]}, {context.user_data["start_longitude"]}.\n'
